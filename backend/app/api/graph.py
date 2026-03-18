@@ -439,23 +439,6 @@ def build_graph():
                     progress_callback=add_progress_callback
                 )
                 
-                # 等待Zep处理完成（查询每个episode的processed状态）
-                task_manager.update_task(
-                    task_id,
-                    message="等待Zep处理数据...",
-                    progress=55
-                )
-                
-                def wait_progress_callback(msg, progress_ratio):
-                    progress = 55 + int(progress_ratio * 35)  # 55% - 90%
-                    task_manager.update_task(
-                        task_id,
-                        message=msg,
-                        progress=progress
-                    )
-                
-                builder._wait_for_episodes(episode_uuids, wait_progress_callback)
-                
                 # 获取图谱数据
                 task_manager.update_task(
                     task_id,

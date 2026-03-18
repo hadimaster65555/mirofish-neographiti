@@ -190,7 +190,10 @@ class GraphBuilderService:
 
             fields: Dict[str, Any] = {}
             for attr_def in entity_def.get("attributes", []):
-                attr_name = safe_attr_name(attr_def["name"])
+                raw_name = attr_def.get("name")
+                if not raw_name:
+                    continue
+                attr_name = safe_attr_name(raw_name)
                 attr_desc = attr_def.get("description", attr_name)
                 fields[attr_name] = (Optional[str], Field(None, description=attr_desc))
 

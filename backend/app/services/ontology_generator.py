@@ -269,6 +269,10 @@ class OntologyGenerator:
         for entity in result["entity_types"]:
             if "attributes" not in entity:
                 entity["attributes"] = []
+            # 过滤掉没有 name 字段的属性
+            entity["attributes"] = [
+                a for a in entity["attributes"] if a.get("name")
+            ]
             if "examples" not in entity:
                 entity["examples"] = []
             # 确保description不超过100字符

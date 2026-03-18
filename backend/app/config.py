@@ -41,6 +41,10 @@ class Config:
     EMBEDDING_API_KEY = os.environ.get('EMBEDDING_API_KEY') or os.environ.get('LLM_API_KEY')
     EMBEDDING_BASE_URL = os.environ.get('EMBEDDING_BASE_URL') or os.environ.get('LLM_BASE_URL', 'https://api.openai.com/v1')
     EMBEDDING_MODEL_NAME = os.environ.get('EMBEDDING_MODEL_NAME', 'text-embedding-v3')
+
+    # 超时配置
+    GRAPHITI_EPISODE_TIMEOUT = float(os.environ.get('GRAPHITI_EPISODE_TIMEOUT', '900'))
+    GRAPHITI_HTTP_TIMEOUT = float(os.environ.get('GRAPHITI_HTTP_TIMEOUT', '180'))
     
     # 文件上传配置
     MAX_CONTENT_LENGTH = 50 * 1024 * 1024  # 50MB
