@@ -1,143 +1,226 @@
-"""Zep Graph 分页读取工具。
+"""图谱节点/边分页读取工具（基于 Graphiti + Neo4j）。
 
-Zep 的 node/edge 列表接口使用 UUID cursor 分页，
-本模块封装自动翻页逻辑（含单页重试），对调用方透明地返回完整列表。
+替代原 Zep Cloud 的分页 API，改为直接对本地 Neo4j 执行 Cypher 查询。
+返回的代理对象（_NodeProxy / _EdgeProxy）暴露与原 Zep 节点/边完全相同的属性，
+确保所有下游调用方（graph_builder、zep_entity_reader、zep_tools）无需修改。
 """
 
 from __future__ import annotations
 
-import time
-from collections.abc import Callable
+import json
 from typing import Any
 
-from zep_cloud import InternalServerError
-from zep_cloud.client import Zep
-
+from .graphiti_client import get_sync_driver
 from .logger import get_logger
 
 logger = get_logger('mirofish.zep_paging')
 
 _DEFAULT_PAGE_SIZE = 100
 _MAX_NODES = 2000
-_DEFAULT_MAX_RETRIES = 3
-_DEFAULT_RETRY_DELAY = 2.0  # seconds, doubles each retry
 
 
-def _fetch_page_with_retry(
-    api_call: Callable[..., list[Any]],
-    *args: Any,
-    max_retries: int = _DEFAULT_MAX_RETRIES,
-    retry_delay: float = _DEFAULT_RETRY_DELAY,
-    page_description: str = "page",
-    **kwargs: Any,
-) -> list[Any]:
-    """单页请求，失败时指数退避重试。仅重试网络/IO类瞬态错误。"""
-    if max_retries < 1:
-        raise ValueError("max_retries must be >= 1")
+# --------------------------------------------------------------------------
+# 代理类：与原 Zep SDK 返回对象保持相同的属性接口
+# --------------------------------------------------------------------------
 
-    last_exception: Exception | None = None
-    delay = retry_delay
+class _NodeProxy:
+    """节点代理：暴露与 Zep NodeData 相同的属性。"""
 
-    for attempt in range(max_retries):
-        try:
-            return api_call(*args, **kwargs)
-        except (ConnectionError, TimeoutError, OSError, InternalServerError) as e:
-            last_exception = e
-            if attempt < max_retries - 1:
-                logger.warning(
-                    f"Zep {page_description} attempt {attempt + 1} failed: {str(e)[:100]}, retrying in {delay:.1f}s..."
-                )
-                time.sleep(delay)
-                delay *= 2
-            else:
-                logger.error(f"Zep {page_description} failed after {max_retries} attempts: {str(e)}")
+    def __init__(self, node_data: dict, labels: list):
+        self._data = node_data
+        self._labels = labels
 
-    assert last_exception is not None
-    raise last_exception
+    @property
+    def uuid_(self) -> str:
+        return self._data.get('uuid', '')
 
+    @property
+    def uuid(self) -> str:
+        return self._data.get('uuid', '')
+
+    @property
+    def name(self) -> str:
+        return self._data.get('name', '') or ''
+
+    @property
+    def labels(self) -> list:
+        return self._labels
+
+    @property
+    def summary(self) -> str:
+        return self._data.get('summary', '') or ''
+
+    @property
+    def attributes(self) -> dict:
+        raw = self._data.get('attributes', {})
+        if isinstance(raw, str):
+            try:
+                return json.loads(raw)
+            except Exception:
+                return {}
+        return raw if isinstance(raw, dict) else {}
+
+    @property
+    def created_at(self):
+        return self._data.get('created_at', None)
+
+
+class _EdgeProxy:
+    """边代理：暴露与 Zep EdgeData 相同的属性。"""
+
+    def __init__(self, edge_data: dict, source_uuid: str, target_uuid: str):
+        self._data = edge_data
+        self._source_uuid = source_uuid
+        self._target_uuid = target_uuid
+
+    @property
+    def uuid_(self) -> str:
+        return self._data.get('uuid', '')
+
+    @property
+    def uuid(self) -> str:
+        return self._data.get('uuid', '')
+
+    @property
+    def name(self) -> str:
+        return self._data.get('name', '') or ''
+
+    @property
+    def fact(self) -> str:
+        return self._data.get('fact', '') or ''
+
+    @property
+    def source_node_uuid(self) -> str:
+        return self._source_uuid or self._data.get('source_node_uuid', '')
+
+    @property
+    def target_node_uuid(self) -> str:
+        return self._target_uuid or self._data.get('target_node_uuid', '')
+
+    @property
+    def attributes(self) -> dict:
+        raw = self._data.get('attributes', {})
+        if isinstance(raw, str):
+            try:
+                return json.loads(raw)
+            except Exception:
+                return {}
+        return raw if isinstance(raw, dict) else {}
+
+    @property
+    def created_at(self):
+        return self._data.get('created_at', None)
+
+    @property
+    def valid_at(self):
+        return self._data.get('valid_at', None)
+
+    @property
+    def invalid_at(self):
+        return self._data.get('invalid_at', None)
+
+    @property
+    def expired_at(self):
+        return self._data.get('expired_at', None)
+
+    @property
+    def fact_type(self) -> str:
+        return self._data.get('fact_type', self._data.get('name', ''))
+
+    @property
+    def episodes(self) -> list:
+        return self._data.get('episodes', [])
+
+    @property
+    def episode_ids(self) -> list:
+        return self._data.get('episode_ids', [])
+
+
+# --------------------------------------------------------------------------
+# 公共分页函数（签名兼容原 Zep 版本）
+# --------------------------------------------------------------------------
 
 def fetch_all_nodes(
-    client: Zep,
-    graph_id: str,
+    graphiti_instance,  # 保留参数以兼容调用方，内部不直接使用
+    group_id: str,
     page_size: int = _DEFAULT_PAGE_SIZE,
     max_items: int = _MAX_NODES,
-    max_retries: int = _DEFAULT_MAX_RETRIES,
-    retry_delay: float = _DEFAULT_RETRY_DELAY,
-) -> list[Any]:
-    """分页获取图谱节点，最多返回 max_items 条（默认 2000）。每页请求自带重试。"""
-    all_nodes: list[Any] = []
-    cursor: str | None = None
-    page_num = 0
+    **kwargs: Any,
+) -> list:
+    """分页获取图谱所有节点（最多 max_items 条）。"""
+    driver = get_sync_driver()
+    all_nodes: list = []
+    skip = 0
 
-    while True:
-        kwargs: dict[str, Any] = {"limit": page_size}
-        if cursor is not None:
-            kwargs["uuid_cursor"] = cursor
+    query = """
+    MATCH (n:Entity {group_id: $group_id})
+    RETURN n, labels(n) AS node_labels
+    ORDER BY n.created_at
+    SKIP $skip LIMIT $limit
+    """
 
-        page_num += 1
-        batch = _fetch_page_with_retry(
-            client.graph.node.get_by_graph_id,
-            graph_id,
-            max_retries=max_retries,
-            retry_delay=retry_delay,
-            page_description=f"fetch nodes page {page_num} (graph={graph_id})",
-            **kwargs,
-        )
-        if not batch:
-            break
+    with driver.session() as session:
+        while True:
+            records = list(session.run(query, group_id=group_id, skip=skip, limit=page_size))
+            if not records:
+                break
 
-        all_nodes.extend(batch)
-        if len(all_nodes) >= max_items:
-            all_nodes = all_nodes[:max_items]
-            logger.warning(f"Node count reached limit ({max_items}), stopping pagination for graph {graph_id}")
-            break
-        if len(batch) < page_size:
-            break
+            for record in records:
+                node_data = dict(record['n'])
+                node_labels = list(record['node_labels'])
+                all_nodes.append(_NodeProxy(node_data, node_labels))
 
-        cursor = getattr(batch[-1], "uuid_", None) or getattr(batch[-1], "uuid", None)
-        if cursor is None:
-            logger.warning(f"Node missing uuid field, stopping pagination at {len(all_nodes)} nodes")
-            break
+            if len(all_nodes) >= max_items:
+                all_nodes = all_nodes[:max_items]
+                logger.warning(
+                    f"Node count reached limit ({max_items}), stopping pagination for group {group_id}"
+                )
+                break
 
+            if len(records) < page_size:
+                break
+
+            skip += page_size
+
+    logger.info(f"Fetched {len(all_nodes)} nodes for group {group_id}")
     return all_nodes
 
 
 def fetch_all_edges(
-    client: Zep,
-    graph_id: str,
+    graphiti_instance,  # 保留参数以兼容调用方，内部不直接使用
+    group_id: str,
     page_size: int = _DEFAULT_PAGE_SIZE,
-    max_retries: int = _DEFAULT_MAX_RETRIES,
-    retry_delay: float = _DEFAULT_RETRY_DELAY,
-) -> list[Any]:
-    """分页获取图谱所有边，返回完整列表。每页请求自带重试。"""
-    all_edges: list[Any] = []
-    cursor: str | None = None
-    page_num = 0
+    **kwargs: Any,
+) -> list:
+    """分页获取图谱所有边（无数量上限）。"""
+    driver = get_sync_driver()
+    all_edges: list = []
+    skip = 0
 
-    while True:
-        kwargs: dict[str, Any] = {"limit": page_size}
-        if cursor is not None:
-            kwargs["uuid_cursor"] = cursor
+    query = """
+    MATCH (s:Entity)-[e:RELATES_TO]->(t:Entity)
+    WHERE e.group_id = $group_id
+    RETURN e, s.uuid AS source_uuid, t.uuid AS target_uuid
+    ORDER BY e.created_at
+    SKIP $skip LIMIT $limit
+    """
 
-        page_num += 1
-        batch = _fetch_page_with_retry(
-            client.graph.edge.get_by_graph_id,
-            graph_id,
-            max_retries=max_retries,
-            retry_delay=retry_delay,
-            page_description=f"fetch edges page {page_num} (graph={graph_id})",
-            **kwargs,
-        )
-        if not batch:
-            break
+    with driver.session() as session:
+        while True:
+            records = list(session.run(query, group_id=group_id, skip=skip, limit=page_size))
+            if not records:
+                break
 
-        all_edges.extend(batch)
-        if len(batch) < page_size:
-            break
+            for record in records:
+                edge_data = dict(record['e'])
+                source_uuid = record.get('source_uuid') or edge_data.get('source_node_uuid', '')
+                target_uuid = record.get('target_uuid') or edge_data.get('target_node_uuid', '')
+                all_edges.append(_EdgeProxy(edge_data, source_uuid, target_uuid))
 
-        cursor = getattr(batch[-1], "uuid_", None) or getattr(batch[-1], "uuid", None)
-        if cursor is None:
-            logger.warning(f"Edge missing uuid field, stopping pagination at {len(all_edges)} edges")
-            break
+            if len(records) < page_size:
+                break
 
+            skip += page_size
+
+    logger.info(f"Fetched {len(all_edges)} edges for group {group_id}")
     return all_edges

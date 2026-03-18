@@ -47,6 +47,16 @@ def create_app(config_class=Config):
     SimulationRunner.register_cleanup()
     if should_log_startup:
         logger.info("已注册模拟进程清理函数")
+
+    # 初始化 Graphiti（构建 Neo4j 索引和约束）
+    if should_log_startup:
+        try:
+            from .utils.graphiti_client import get_graphiti, run_async
+            graphiti = get_graphiti()
+            run_async(graphiti.build_indices_and_constraints())
+            logger.info("Graphiti 索引和约束已初始化")
+        except Exception as _e:
+            logger.warning(f"Graphiti 初始化跳过（Neo4j 可能未启动）: {_e}")
     
     # 请求日志中间件
     @app.before_request
