@@ -122,9 +122,14 @@ LLM_API_KEY=your_api_key
 LLM_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
 LLM_MODEL_NAME=qwen-plus
 
-# Zep Cloud 配置
-# 每月免费额度即可支撑简单使用：https://app.getzep.com/
-ZEP_API_KEY=your_zep_api_key
+# Neo4j 图数据库配置（本地运行，Graphiti 知识图谱后端）
+# 通过 Docker 一键启动：docker compose up -d neo4j
+NEO4J_URI=bolt://localhost:7687
+NEO4J_USER=neo4j
+NEO4J_PASSWORD=your_neo4j_password
+
+# Embedding 模型配置（用于 Graphiti 语义搜索，默认复用 LLM 配置）
+EMBEDDING_MODEL_NAME=text-embedding-v3
 ```
 
 #### 2. 安装依赖
@@ -190,7 +195,7 @@ MiroFish团队长期招募全职/实习，如果你对多Agent应用感兴趣，
 
 **MiroFish 得到了盛大集团的战略支持和孵化！**
 
-MiroFish 的仿真引擎由 **[OASIS](https://github.com/camel-ai/oasis)** 驱动，我们衷心感谢 CAMEL-AI 团队的开源贡献！
+MiroFish 的仿真引擎由 **[OASIS (Open Agent Social Interaction Simulations)](https://github.com/camel-ai/oasis)** 驱动，我们衷心感谢 CAMEL-AI 团队的开源贡献！
 
 ## 📈 项目统计
 

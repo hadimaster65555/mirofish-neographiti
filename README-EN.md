@@ -122,9 +122,14 @@ LLM_API_KEY=your_api_key
 LLM_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
 LLM_MODEL_NAME=qwen-plus
 
-# Zep Cloud Configuration
-# Free monthly quota is sufficient for simple usage: https://app.getzep.com/
-ZEP_API_KEY=your_zep_api_key
+# Neo4j Graph Database (local, powers Graphiti knowledge graph)
+# Start with Docker: docker compose up -d neo4j
+NEO4J_URI=bolt://localhost:7687
+NEO4J_USER=neo4j
+NEO4J_PASSWORD=your_neo4j_password
+
+# Embedding model (used by Graphiti for semantic search, reuses LLM config by default)
+EMBEDDING_MODEL_NAME=text-embedding-v3
 ```
 
 #### 2. Install Dependencies
