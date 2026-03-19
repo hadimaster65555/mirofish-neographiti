@@ -1083,13 +1083,13 @@ class ZepToolsService:
         
         将复杂问题分解为多个可以独立检索的子问题
         """
-        system_prompt = """你是一个专业的问题分析专家。你的任务是将一个复杂问题分解为多个可以在模拟世界中独立观察的子问题。
+        system_prompt = """You are a professional problem analysis expert. Your task is to decompose a complex question into multiple sub-questions that can be independently observed in the simulation world.
 
-要求：
-1. 每个子问题应该足够具体，可以在模拟世界中找到相关的Agent行为或事件
-2. 子问题应该覆盖原问题的不同维度（如：谁、什么、为什么、怎么样、何时、何地）
-3. 子问题应该与模拟场景相关
-4. 返回JSON格式：{"sub_queries": ["子问题1", "子问题2", ...]}"""
+Requirements:
+1. Each sub-question should be specific enough to find relevant Agent behavior or events in the simulation world
+2. Sub-questions should cover different dimensions of the original question (e.g., who, what, why, how, when, where)
+3. Sub-questions should be relevant to the simulation scenario
+4. Return JSON format: {"sub_queries": ["sub-question 1", "sub-question 2", ...]}"""
 
         user_prompt = f"""模拟需求背景：
 {simulation_requirement}
@@ -1559,18 +1559,18 @@ class ZepToolsService:
             }
             agent_summaries.append(summary)
         
-        system_prompt = """你是一个专业的采访策划专家。你的任务是根据采访需求，从模拟Agent列表中选择最适合采访的对象。
+        system_prompt = """You are a professional interview planning expert. Your task is to select the most suitable interview subjects from the simulation Agent list based on the interview requirements.
 
-选择标准：
-1. Agent的身份/职业与采访主题相关
-2. Agent可能持有独特或有价值的观点
-3. 选择多样化的视角（如：支持方、反对方、中立方、专业人士等）
-4. 优先选择与事件直接相关的角色
+Selection criteria:
+1. The Agent's identity/profession is relevant to the interview topic
+2. The Agent may hold unique or valuable viewpoints
+3. Select diverse perspectives (e.g., supporters, opponents, neutral parties, professionals, etc.)
+4. Prioritize roles directly related to the event
 
-返回JSON格式：
+Return JSON format:
 {
-    "selected_indices": [选中Agent的索引列表],
-    "reasoning": "选择理由说明"
+    "selected_indices": [list of selected Agent indices],
+    "reasoning": "Explanation of selection reasoning"
 }"""
 
         user_prompt = f"""采访需求：
@@ -1623,17 +1623,17 @@ class ZepToolsService:
         
         agent_roles = [a.get("profession", "未知") for a in selected_agents]
         
-        system_prompt = """你是一个专业的记者/采访者。根据采访需求，生成3-5个深度采访问题。
+        system_prompt = """You are a professional journalist/interviewer. Generate 3-5 in-depth interview questions based on the interview requirements.
 
-问题要求：
-1. 开放性问题，鼓励详细回答
-2. 针对不同角色可能有不同答案
-3. 涵盖事实、观点、感受等多个维度
-4. 语言自然，像真实采访一样
-5. 每个问题控制在50字以内，简洁明了
-6. 直接提问，不要包含背景说明或前缀
+Question requirements:
+1. Open-ended questions that encourage detailed answers
+2. Questions that may yield different answers from different roles
+3. Cover multiple dimensions including facts, opinions, and feelings
+4. Natural language, like a real interview
+5. Each question should be concise and clear, within 50 words
+6. Ask directly without background explanations or prefixes
 
-返回JSON格式：{"questions": ["问题1", "问题2", ...]}"""
+Return JSON format: {"questions": ["question 1", "question 2", ...]}"""
 
         user_prompt = f"""采访需求：{interview_requirement}
 
@@ -1677,21 +1677,21 @@ class ZepToolsService:
         for interview in interviews:
             interview_texts.append(f"【{interview.agent_name}（{interview.agent_role}）】\n{interview.response[:500]}")
         
-        system_prompt = """你是一个专业的新闻编辑。请根据多位受访者的回答，生成一份采访摘要。
+        system_prompt = """You are a professional news editor. Please generate an interview summary based on the responses from multiple interviewees.
 
-摘要要求：
-1. 提炼各方主要观点
-2. 指出观点的共识和分歧
-3. 突出有价值的引言
-4. 客观中立，不偏袒任何一方
-5. 控制在1000字内
+Summary requirements:
+1. Distill the main viewpoints from all parties
+2. Identify areas of consensus and disagreement among viewpoints
+3. Highlight valuable quotes
+4. Be objective and neutral, without favoring any party
+5. Keep within 1000 words
 
-格式约束（必须遵守）：
-- 使用纯文本段落，用空行分隔不同部分
-- 不要使用Markdown标题（如#、##、###）
-- 不要使用分割线（如---、***）
-- 引用受访者原话时使用中文引号「」
-- 可以使用**加粗**标记关键词，但不要使用其他Markdown语法"""
+Format constraints (must be followed):
+- Use plain text paragraphs, separated by blank lines between sections
+- Do not use Markdown headings (e.g., #, ##, ###)
+- Do not use dividers (e.g., ---, ***)
+- Use quotation marks when quoting interviewees directly
+- Bold (**) may be used to mark key terms, but do not use other Markdown syntax"""
 
         user_prompt = f"""采访主题：{interview_requirement}
 
